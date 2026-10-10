@@ -4,11 +4,17 @@
 
 An Obsidian plugin for working with Mermaid diagrams. Reading: every rendered diagram becomes a small stage with pan, zoom, fit, reset, and a lightweight fullscreen overlay. Writing: a picker inserts a ready-made template for any diagram type in one click.
 
-It works with **any theme**. [Lumen Glass](https://github.com/paddychenc75/obsidian-lumen) is an optional skin, not a dependency. The theme only styles the `.lmm-*` classes this plugin creates. The plugin only uses Obsidian CSS tokens, so other themes keep a quiet header band over a flush figure.
-
-The theme works without this plugin. This plugin works without the theme.
+It works with any theme and needs no companion plugin. The chrome is drawn with Obsidian's own colour and radius variables, so it follows the active theme; the diagram itself keeps whatever look the theme gives Mermaid.
 
 Mermaid Kit continues [Lumen Stage](https://github.com/paddychenc75/obsidian-lumen-stage), which is no longer developed. The two wrap the same diagrams, so disable Lumen Stage before enabling Mermaid Kit.
+
+## Diagram style
+
+Obsidian draws Mermaid diagrams with Mermaid's stock light palette and, in a dark theme, inverts the picture. Mermaid Kit instead gives Mermaid a palette built from the colors your theme is showing: background, text, borders, the accent color, and Obsidian's eight named hues for series such as pie slices and Git branches. Diagrams use the interface font and look at home in any theme, light or dark, across every diagram type.
+
+- The palette follows theme and light/dark changes; staged diagrams are redrawn in place and keep their zoom and position
+- A theme that styles Mermaid elements itself still has the last word on those elements
+- **Settings → Mermaid Kit → Match diagrams to the theme** turns this off and returns to the stock palette
 
 ## Templates
 
@@ -28,11 +34,20 @@ Inline, in the note:
 - `Ctrl` / `Cmd` + wheel, or a trackpad pinch, zooms toward the pointer
 - Ordinary wheel movement scrolls the note
 - Click the diagram, or the fullscreen button, for a lightweight overlay
-- Header buttons: zoom out, zoom readout (click for 100%), zoom in, fit, reset, fullscreen
+- Header buttons: zoom out, zoom readout (click for 100%), zoom in, fit, reset, more actions, fullscreen
 - With the stage focused: `+` / `-` zoom, `0` resets, `1` shows 100%, arrow keys pan, `F` opens fullscreen
 - The cursor is a pointing hand while the whole diagram is in view and a grab hand once there is something to drag
 - An edge that crops the diagram carries a soft shade
 - Zooming grows the stage; it hands the space back when the pointer or the focus leaves
+
+The **More actions** menu, inline and in the overlay:
+
+- **Copy as image** puts a PNG on the clipboard, drawn at screen density on the stage's background with the look your theme gives the diagram
+- **Copy as SVG** copies standalone SVG markup with that look baked in
+- **Copy Mermaid source** copies the definition without its fence
+- **Edit source** puts the cursor in the block. It is offered in Live Preview and Source mode, for diagrams that belong to the open note
+
+The two source items appear only when the diagram can be traced back to its block with certainty; a diagram inside an embedded note offers the copies but not the edit.
 
 In the overlay:
 
@@ -53,8 +68,6 @@ Commands: **Open first Mermaid diagram fullscreen** opens the diagram on screen 
 
 The chrome is a silent 36px header band with icon buttons that recede until the pointer or the keyboard reaches the stage. The diagram keeps a 12px margin from the frame. There is no drafting grid and no floating instrument toolbar.
 
-Internal class names stay on the `lmm-*` prefix so existing Lumen Glass scoped styles keep matching. Chrome rules use two classes at most, so a theme can restyle them with `.lmm-host .lmm-*`.
-
 ## Install
 
 This plugin is not on the community list yet. Install it locally:
@@ -64,12 +77,6 @@ This plugin is not on the community list yet. Install it locally:
 3. Enable **Mermaid Kit** under **Settings → Community plugins**.
 
 Reload the plugin after a rebuild. Obsidian reads `manifest.json`, `main.js`, and `styles.css` from that folder.
-
-## Independent use
-
-No Lumen Glass, Style Settings, or other companion plugin is required. On a stock theme you still get pan, zoom, fit, reset, and fullscreen. Live Preview also drops the extra embed pad around an enhanced diagram so the stage is not wrapped in a second shell.
-
-If you do use Lumen Glass, the theme replaces the fallback chrome with its code-block header band and diagram surface. That skin is opt-in by installing the theme; it is not compiled into this plugin.
 
 ## Development
 
@@ -83,6 +90,7 @@ npm run check
 
 - `npm run build` typechecks, then bundles `src/` into `main.js` with esbuild
 - `npm run check` typechecks and validates manifest, versions, and CSS token rules
+- `npm test` runs the unit tests for the parts that do not need the app: insertion, source extraction, pan and fit geometry, and the template list
 - `npm run dev` watches `src/` and rebuilds with an inline sourcemap
 
 Edit TypeScript under `src/`. Do not hand-edit `main.js`. After a build, reload the plugin in Obsidian.

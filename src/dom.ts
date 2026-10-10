@@ -9,9 +9,7 @@ export function prefersReducedMotion(): boolean {
   return !!(view.matchMedia && view.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
+export { clamp } from "./geometry";
 
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -53,5 +51,5 @@ export function measureSvg(svg: SVGSVGElement): Size | null {
 export function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!target || !("instanceOf" in target)) return false;
   const node = target as Node;
-  return node.instanceOf(Element) && !!node.closest("a, button, input, textarea, select, .lmm-bar");
+  return node.instanceOf(Element) && !!node.closest("a, button, input, textarea, select, .mmk-bar");
 }

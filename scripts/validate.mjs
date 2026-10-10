@@ -74,15 +74,6 @@ if (manifest.author !== "paddychenc75") {
   fail(`manifest author must be paddychenc75; received ${manifest.author}`);
 }
 
-const styles = existsSync(resolve(root, "styles.css")) ? read("styles.css") : "";
-const stylesWithoutComments = styles.replace(/\/\*[\s\S]*?\*\//g, "");
-const danglingLg = [...stylesWithoutComments.matchAll(/var\(\s*(--lg-[a-z0-9-]+)\s*\)/g)].map(
-  (match) => match[1],
-);
-if (danglingLg.length > 0) {
-  fail(`styles.css uses --lg-* tokens without fallback: ${[...new Set(danglingLg)].join(", ")}`);
-}
-
 const readme = existsSync(resolve(root, "README.md")) ? read("README.md") : "";
 if (/\/Users\/|[A-Z]:\\Users\\/i.test(readme)) {
   fail("README.md contains a machine-specific absolute path");

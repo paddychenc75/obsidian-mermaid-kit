@@ -1,4 +1,4 @@
-import { Platform, setIcon } from "obsidian";
+import { Menu, Notice, Platform, setIcon } from "obsidian";
 import {
   CLICK_SLOP,
   CLOSE_MS,
@@ -15,11 +15,16 @@ import {
   ZOOM_STEP,
 } from "./constants";
 import { clamp, el, isInteractiveTarget, measureSvg, prefersReducedMotion } from "./dom";
+import { backdropOf, standaloneSvg, svgToPng } from "./export";
+import { containScale, panRange } from "./geometry";
 import { t } from "./i18n";
+import type { SourceRef } from "./source";
 
 export interface CanvasOptions {
   fullscreen?: boolean;
   onClose?: (() => void) | null;
+  /** Traces the diagram back to its definition in the note, when that is possible. */
+  source?: (() => SourceRef | null) | null;
 }
 
 function resetSvgInlineLayout(svg: SVGSVGElement): void {
@@ -36,21 +41,21 @@ function resetSvgInlineLayout(svg: SVGSVGElement): void {
 function syncEmbedParent(host: HTMLElement, on: boolean): void {
   const embed = host.parentElement;
   if (!embed?.instanceOf(HTMLElement) || !embed.hasClass("cm-embed-block")) return;
-  embed.toggleClass("lmm-embed", on);
+  embed.toggleClass("mmk-embed", on);
 }
 
 export function unwrapHost(host: HTMLElement): void {
   syncEmbedParent(host, false);
-  const viewport = host.querySelector(":scope > .lmm-viewport");
-  const svg = host.querySelector(".lmm-stage svg") || host.querySelector(":scope > svg");
-  host.querySelector(":scope > .lmm-bar")?.remove();
+  const viewport = host.querySelector(":scope > .mmk-viewport");
+  const svg = host.querySelector(".mmk-stage svg") || host.querySelector(":scope > svg");
+  host.querySelector(":scope > .mmk-bar")?.remove();
   if (svg?.instanceOf(SVGSVGElement)) {
     resetSvgInlineLayout(svg);
     svg.removeAttribute(MARK);
     if (svg.parentElement !== host) host.insertBefore(svg, viewport);
   }
   viewport?.remove();
-  host.classList.remove("lmm-host");
+  host.classList.remove("mmk-host");
 }
 
 interface DragState {
@@ -92,6 +97,7 @@ export class MermaidCanvas {
   win: Window;
   fullscreen: boolean;
   onClose: (() => void) | null;
+  source: (() => SourceRef | null) | null;
   scale = 1;
   tx = 0;
   ty = 0;
@@ -118,6 +124,7 @@ export class MermaidCanvas {
   btnFit!: HTMLButtonElement;
   btnReset!: HTMLButtonElement;
   btnFull!: HTMLButtonElement;
+  btnMore!: HTMLButtonElement;
   childFs: MermaidCanvas | null = null;
   ro: ResizeObserver | null = null;
 
@@ -138,27 +145,42 @@ export class MermaidCanvas {
     this.win = this.doc.defaultView ?? window;
     this.fullscreen = !!options.fullscreen;
     this.onClose = options.onClose ?? null;
-    this.stage = el("div", "lmm-stage");
-    this.viewport = el("div", this.fullscreen ? "lmm-viewport lmm-viewport--fs" : "lmm-viewport");
+    this.source = options.source ?? null;
+    this.stage = el("div", "mmk-stage");
+    this.viewport = el("div", this.fullscreen ? "mmk-viewport mmk-viewport--fs" : "mmk-viewport");
     this.build();
   }
 
-  static adopt(host: HTMLElement): MermaidCanvas | null {
-    const viewport = host.querySelector(":scope > .lmm-viewport");
-    const stage = viewport?.querySelector(":scope > .lmm-stage");
+  static adopt(host: HTMLElement, options: CanvasOptions = {}): MermaidCanvas | null {
+    const viewport = host.querySelector(":scope > .mmk-viewport");
+    const stage = viewport?.querySelector(":scope > .mmk-stage");
     const svg = stage?.querySelector(":scope > svg");
-    const toolbar = host.querySelector(":scope > .lmm-bar");
-    const buttons = toolbar
-      ? Array.from(toolbar.querySelectorAll(":scope .lmm-flair")).flatMap((node) =>
-          node.instanceOf(HTMLButtonElement) ? [node] : [],
-        )
-      : [];
+    const toolbar = host.querySelector(":scope > .mmk-bar");
+    // Buttons are found by role, not position. A bar left by a build that lacks one of them
+    // is not adopted, and the scan rebuilds it.
+    const button = (act: string) => {
+      const node = toolbar?.querySelector(`.mmk-flair[data-mmk-act="${act}"]`);
+      return node?.instanceOf(HTMLButtonElement) ? node : null;
+    };
+    const btnOut = button("out");
+    const gauge = button("gauge");
+    const btnIn = button("in");
+    const btnFit = button("fit");
+    const btnReset = button("reset");
+    const btnFull = button("full");
+    const btnMore = button("more");
     if (
       !viewport?.instanceOf(HTMLDivElement) ||
       !stage?.instanceOf(HTMLDivElement) ||
       !svg?.instanceOf(SVGSVGElement) ||
       !toolbar?.instanceOf(HTMLDivElement) ||
-      buttons.length < 6
+      !btnOut ||
+      !gauge ||
+      !btnIn ||
+      !btnFit ||
+      !btnReset ||
+      !btnFull ||
+      !btnMore
     ) {
       return null;
     }
@@ -167,8 +189,9 @@ export class MermaidCanvas {
     canvas.svg = svg;
     canvas.doc = svg.ownerDocument;
     canvas.win = canvas.doc.defaultView ?? window;
-    canvas.fullscreen = !!host.closest(".lmm-fs");
+    canvas.fullscreen = !!host.closest(".mmk-fs");
     canvas.onClose = null;
+    canvas.source = options.source ?? null;
     canvas.scale = 1;
     canvas.tx = 0;
     canvas.ty = 0;
@@ -181,8 +204,8 @@ export class MermaidCanvas {
     canvas.destroyed = false;
     canvas.pose = "reset";
     canvas.fitCap = MAX_SCALE;
-    const overlay = host.closest(".lmm-fs");
-    const child = host.closest(".lmm-fs-doc");
+    const overlay = host.closest(".mmk-fs");
+    const child = host.closest(".mmk-fs-doc");
     canvas.overlay = overlay?.instanceOf(HTMLDivElement) ? overlay : null;
     canvas.host = host;
     canvas.child = child?.instanceOf(HTMLDivElement) ? child : null;
@@ -191,14 +214,13 @@ export class MermaidCanvas {
     canvas.stage = stage;
     canvas.viewport = viewport;
     canvas.toolbar = toolbar;
-    const [btnOut, gauge, btnIn, btnFit, btnReset, btnFull] = buttons;
-    if (!btnOut || !gauge || !btnIn || !btnFit || !btnReset || !btnFull) return null;
     canvas.btnOut = btnOut;
     canvas.gauge = gauge;
     canvas.btnIn = btnIn;
     canvas.btnFit = btnFit;
     canvas.btnReset = btnReset;
     canvas.btnFull = btnFull;
+    canvas.btnMore = btnMore;
     canvas.childFs = null;
     canvas.ro = null;
     canvas.animTimer = 0;
@@ -232,6 +254,7 @@ export class MermaidCanvas {
     this.btnFull = this.fullscreen
       ? replace(this.btnFull, () => this.close())
       : replace(this.btnFull, () => this.openFullscreen());
+    this.btnMore = replace(this.btnMore, () => this.openMenu());
   }
 
   applyNaturalSize(): void {
@@ -257,12 +280,12 @@ export class MermaidCanvas {
     this.viewport.appendChild(this.stage);
 
     if (this.fullscreen) {
-      this.overlay = el("div", "lmm-fs");
+      this.overlay = el("div", "mmk-fs");
       this.overlay.setAttribute("role", "dialog");
       this.overlay.setAttribute("aria-modal", "true");
       this.overlay.setAttribute("aria-label", t("dialog"));
-      this.child = el("div", "markdown-rendered lmm-fs-doc");
-      this.host = el("div", "mermaid lmm-host");
+      this.child = el("div", "markdown-rendered mmk-fs-doc");
+      this.host = el("div", "mermaid mmk-host");
       this.host.appendChild(this.viewport);
       this.child.appendChild(this.host);
       this.overlay.appendChild(this.child);
@@ -275,7 +298,7 @@ export class MermaidCanvas {
       const host = this.svg.closest(".mermaid") || parent;
       if (!host?.instanceOf(HTMLElement)) throw new Error("Mermaid Kit: mermaid host not found");
       this.host = host;
-      this.host.classList.add("lmm-host");
+      this.host.classList.add("mmk-host");
       this.host.appendChild(this.viewport);
       syncEmbedParent(host, true);
     }
@@ -291,18 +314,25 @@ export class MermaidCanvas {
     const host = this.host;
     if (!host) throw new Error("Mermaid Kit: mermaid host not found");
 
-    const bar = el("div", "lmm-bar");
+    const bar = el("div", "mmk-bar");
     bar.setAttribute("role", "toolbar");
     bar.setAttribute("aria-label", t("controls"));
 
-    const kind = el("span", "lmm-kind");
+    const kind = el("span", "mmk-kind");
     kind.textContent = t("kind");
 
     // `clickable-icon` opts the buttons out of the generic bordered <button> chrome
     // that Obsidian and most themes apply, so they read as toolbar icons everywhere.
-    const flair = (icon: string | null, label: string, title: string, action: () => void) => {
-      const node = el("button", "clickable-icon lmm-flair");
+    const flair = (
+      act: string,
+      icon: string | null,
+      label: string,
+      title: string,
+      action: () => void,
+    ) => {
+      const node = el("button", "clickable-icon mmk-flair");
       node.type = "button";
+      node.setAttribute("data-mmk-act", act);
       if (icon) setIcon(node, icon);
       if (!node.firstChild) node.textContent = label;
       // The bar sits inside `.mermaid`, so a theme's `.mermaid svg { width: auto }` reaches the
@@ -321,29 +351,30 @@ export class MermaidCanvas {
     };
 
     const group = (...nodes: HTMLElement[]) => {
-      const node = el("div", "lmm-group");
+      const node = el("div", "mmk-group");
       for (const child of nodes) node.appendChild(child);
       return node;
     };
 
-    this.btnOut = flair("minus", "−", t("zoomOut"), () => this.zoomBy(1 / ZOOM_STEP));
-    this.gauge = flair(null, "100%", t("actualSize"), () => this.actualSize());
-    this.gauge.addClass("lmm-gauge");
-    this.btnIn = flair("plus", "+", t("zoomIn"), () => this.zoomBy(ZOOM_STEP));
-    this.btnFit = flair("scan", "Fit", t("fit"), () => this.fit(true));
-    this.btnReset = flair("rotate-ccw", "Reset", t("reset"), () => this.reset(true));
+    this.btnOut = flair("out", "minus", "−", t("zoomOut"), () => this.zoomBy(1 / ZOOM_STEP));
+    this.gauge = flair("gauge", null, "100%", t("actualSize"), () => this.actualSize());
+    this.gauge.addClass("mmk-gauge");
+    this.btnIn = flair("in", "plus", "+", t("zoomIn"), () => this.zoomBy(ZOOM_STEP));
+    this.btnFit = flair("fit", "scan", "Fit", t("fit"), () => this.fit(true));
+    this.btnReset = flair("reset", "rotate-ccw", "Reset", t("reset"), () => this.reset(true));
     this.btnFull = this.fullscreen
-      ? flair("x", "Close", t("close"), () => this.close())
-      : flair("maximize-2", "Full", t("fullscreen"), () => this.openFullscreen());
+      ? flair("full", "x", "Close", t("close"), () => this.close())
+      : flair("full", "maximize-2", "Full", t("fullscreen"), () => this.openFullscreen());
 
-    const actions = el("div", "lmm-actions");
+    const actions = el("div", "mmk-actions");
     actions.appendChild(group(this.btnOut, this.gauge, this.btnIn));
+    this.btnMore = flair("more", "ellipsis", "More", t("more"), () => this.openMenu());
     actions.appendChild(group(this.btnFit, this.btnReset));
-    actions.appendChild(group(this.btnFull));
+    actions.appendChild(group(this.btnMore, this.btnFull));
 
     bar.appendChild(kind);
     if (this.fullscreen) {
-      const hint = el("span", "lmm-hint");
+      const hint = el("span", "mmk-hint");
       hint.textContent = t("hint", { mod: Platform.isMacOS ? "⌘" : "Ctrl" });
       bar.appendChild(hint);
       // The hint is a greeting, not furniture: it steps aside once it has been read or acted on.
@@ -358,7 +389,7 @@ export class MermaidCanvas {
     if (!this.hintTimer) return;
     this.win.clearTimeout(this.hintTimer);
     this.hintTimer = 0;
-    this.toolbar?.querySelector(".lmm-hint")?.classList.add("is-spent");
+    this.toolbar?.querySelector(".mmk-hint")?.classList.add("is-spent");
   }
 
   startDrag(id: number, x: number, y: number): void {
@@ -646,12 +677,7 @@ export class MermaidCanvas {
   fitScale(max = MAX_SCALE): number {
     const width = this.viewport.clientWidth;
     const height = this.fullscreen ? this.viewport.clientHeight : this.maxInlineHeight();
-    const pad = this.pad() * 2;
-    return clamp(
-      Math.min((width - pad) / this.nat.w, (height - pad) / this.nat.h, max),
-      MIN_SCALE,
-      MAX_SCALE,
-    );
+    return containScale({ w: width, h: height }, this.nat, this.pad(), { min: MIN_SCALE, max });
   }
 
   /** `growOnly` keeps the note from jumping under the pointer while zooming out. */
@@ -663,7 +689,7 @@ export class MermaidCanvas {
     if (height === this.inlineHeight) return;
     this.inlineHeight = height;
     this.viewport.setCssStyles({ height: "" });
-    this.viewport.setCssProps({ "--lmm-vh": `${height}px` });
+    this.viewport.setCssProps({ "--mmk-vh": `${height}px` });
   }
 
   /** Scale to `scale` and rest the diagram where the frame wants it: centred, or padded at the top left. */
@@ -691,11 +717,8 @@ export class MermaidCanvas {
 
   panBounds(): PanBounds {
     const pad = this.pad();
-    // A diagram that fits is centred; one that overflows can be dragged until its edge clears the pad.
-    const axis = (view: number, used: number): [number, number] =>
-      used <= view - pad * 2 ? [(view - used) / 2, (view - used) / 2] : [view - used - pad, pad];
-    const [txMin, txMax] = axis(this.viewport.clientWidth, this.nat.w * this.scale);
-    const [tyMin, tyMax] = axis(this.viewport.clientHeight, this.nat.h * this.scale);
+    const [txMin, txMax] = panRange(this.viewport.clientWidth, this.nat.w * this.scale, pad);
+    const [tyMin, tyMax] = panRange(this.viewport.clientHeight, this.nat.h * this.scale, pad);
     return { txMin, txMax, tyMin, tyMax };
   }
 
@@ -793,6 +816,85 @@ export class MermaidCanvas {
     else button.removeAttribute("aria-disabled");
   }
 
+  /** Swaps in a fresh drawing of the same diagram and keeps the view the reader had. */
+  replaceSvg(svg: SVGSVGElement): void {
+    if (this.destroyed) return;
+    svg.setAttribute(MARK, "1");
+    this.svg.replaceWith(svg);
+    this.svg = svg;
+    this.applyNaturalSize();
+    if (this.pose === "fit") this.fit(false, this.fitCap);
+    else if (this.pose === "reset") this.reset(false);
+    else {
+      this.clampPan();
+      this.render(false);
+    }
+  }
+
+  /** Copy and edit actions. They live in a menu so the bar keeps to what a reader reaches for. */
+  openMenu(): void {
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setTitle(t("copyImage"))
+        .setIcon("image")
+        .onClick(() => void this.copyImage()),
+    );
+    menu.addItem((item) =>
+      item
+        .setTitle(t("copySvg"))
+        .setIcon("file-code")
+        .onClick(() => void this.copyText(standaloneSvg(this.svg, this.nat))),
+    );
+    const source = this.source?.() ?? null;
+    if (source) {
+      menu.addItem((item) =>
+        item
+          .setTitle(t("copySource"))
+          .setIcon("clipboard-copy")
+          .onClick(() => void this.copyText(source.text)),
+      );
+      const edit = source.edit;
+      if (edit) {
+        menu.addItem((item) =>
+          item
+            .setTitle(t("editSource"))
+            .setIcon("pencil")
+            .onClick(() => {
+              this.close();
+              edit();
+            }),
+        );
+      }
+    }
+    const rect = this.btnMore.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 }, this.doc);
+  }
+
+  async copyText(text: string): Promise<void> {
+    try {
+      await this.win.navigator.clipboard.writeText(text);
+      new Notice(t("copied"));
+    } catch (error) {
+      console.error("Mermaid Kit: could not copy", error);
+      new Notice(t("copyFailed"));
+    }
+  }
+
+  async copyImage(): Promise<void> {
+    const host = this.host;
+    if (!host) return;
+    try {
+      const markup = standaloneSvg(this.svg, this.nat);
+      const blob = await svgToPng(this.doc, markup, this.nat, backdropOf(host));
+      await this.win.navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      new Notice(t("copied"));
+    } catch (error) {
+      console.error("Mermaid Kit: could not copy the image", error);
+      new Notice(t("copyFailed"));
+    }
+  }
+
   openFullscreen(): void {
     if (this.childFs) return;
     for (const open of MermaidCanvas.overlays) {
@@ -803,6 +905,7 @@ export class MermaidCanvas {
     resetSvgInlineLayout(clone);
     this.childFs = new MermaidCanvas(clone, {
       fullscreen: true,
+      source: this.source,
       onClose: () => {
         this.childFs = null;
         if (this.viewport.isConnected) this.viewport.focus({ preventScroll: true });

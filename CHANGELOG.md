@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0
+
+Theme-matched diagrams, copy and edit actions, and a chrome that no longer depends on a theme.
+
+Added
+
+- Diagrams are drawn in the colors and font of the active theme instead of Mermaid's stock palette, in light and dark mode and for every diagram type. A new setting turns this off
+- More actions menu on every stage: copy the diagram as a PNG image or as standalone SVG, copy its Mermaid source, and jump to the source for editing
+- Unit tests and a CI workflow that builds, checks, and tests every push and pull request
+
+Changed
+
+- The plugin no longer has a theme-specific skin. It draws one look everywhere from Obsidian's own variables, and its layout rules now hold against themes that style `.mermaid`
+- Internal classes, CSS variables, and data attributes moved from the `lmm-` prefix to `mmk-`. A snippet or theme that targeted `.lmm-*` needs the new prefix
+
+Fixed
+
+- On a dark theme that does not style Mermaid itself, a staged diagram lost Obsidian's dark-mode inversion and showed the light palette on a dark stage
+- In Live Preview, hovering a staged diagram drew the core embed outline around the stage and its margins
+- A toolbar left behind by an older build is rebuilt instead of being adopted with a missing button
+
 ## 1.0.0
 
 First release of Mermaid Kit. It continues Lumen Stage 1.1.0, which is no longer developed, under a new plugin id.

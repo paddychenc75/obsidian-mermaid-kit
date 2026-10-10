@@ -1,18 +1,21 @@
 /*
- * Mermaid Kit — structure and a quiet fallback skin.
- * Lumen Glass optionally skins these .lmm-* classes. Other themes
- * keep this fallback: a silent header band over a flush figure, no grid,
- * no floating instrument chrome.
+ * Mermaid Kit — the stage, its header band, the overlay, and the template
+ * picker. One look for every theme: a silent header band over a framed
+ * figure, no grid, no floating instrument chrome.
  *
- * Tokens are Obsidian native variables only. Do not introduce --lg-*
- * here without a fallback; the theme owns those names.
+ * Colours and radii come from Obsidian's own variables, so the chrome
+ * follows the active theme without the theme knowing about the plugin.
  *
- * Specificity budget: chrome rules stay at two classes or fewer so a
- * theme can restyle them with `.lmm-host .lmm-*`. Theme CSS loads after
- * plugin CSS, so a tie goes to the theme.
+ * The host is the `.mermaid` element Obsidian renders, and themes style
+ * that element for the plain, unstaged figure: paddings, breakout widths,
+ * transforms, scrollers. Theme CSS loads after plugin CSS, so the rules the
+ * stage cannot work without are written one class stronger than a theme's
+ * usual `.markdown-rendered .mermaid`.
  */
 
-.mermaid.lmm-host {
+/* Structure: a theme must not move, pad, or scroll the stage. */
+.mermaid.mmk-host,
+.markdown-rendered .mermaid.mmk-host {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -22,6 +25,11 @@
   margin-inline: 0;
   padding: 0;
   overflow: hidden;
+  transform: none;
+}
+
+/* Surface: left at the weaker selector, so a theme's own diagram surface carries over. */
+.mermaid.mmk-host {
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m, 8px);
   background: var(--background-primary);
@@ -32,24 +40,31 @@
  * .markdown-source-view.mod-cm6 .cm-embed-block > .mermaid { overflow-x: auto }
  * A nested scroller fights the plugin viewport and shows a second gutter.
  */
-.markdown-source-view.mod-cm6 .cm-embed-block > .mermaid.lmm-host {
+.markdown-source-view.mod-cm6 .cm-embed-block > .mermaid.mmk-host {
   overflow: hidden;
 }
 
 /*
  * Strip the default embed pad so Live Preview does not grow a second
- * shell around the stage. Lumen Glass also skins this; the rule lives
- * here so other themes get the same structure.
+ * shell around the stage.
  */
-.markdown-source-view.mod-cm6 .cm-embed-block.lmm-embed {
+.markdown-source-view.mod-cm6 .cm-embed-block.mmk-embed {
   padding: 0;
   background: transparent;
   box-shadow: none;
 }
 
+/*
+ * Core draws a hover outline around the embed block. The stage has its
+ * own frame, and the outline would also fence in the stage's margins.
+ */
+.markdown-source-view.mod-cm6 .cm-embed-block.mmk-embed:hover {
+  box-shadow: none;
+}
+
 /* Header band */
 
-.lmm-bar {
+.mmk-bar {
   display: flex;
   flex: none;
   align-items: center;
@@ -64,7 +79,7 @@
   user-select: none;
 }
 
-.lmm-kind {
+.mmk-kind {
   flex: none;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
@@ -73,7 +88,7 @@
   line-height: 20px;
 }
 
-.lmm-hint {
+.mmk-hint {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -87,7 +102,7 @@
 }
 
 /* Read once, or acted on: the hint leaves the band to the controls. */
-.lmm-hint.is-spent {
+.mmk-hint.is-spent {
   opacity: 0;
 }
 
@@ -95,7 +110,7 @@
  * Most diagrams are read, not operated. The controls stay legible but
  * recede until the pointer or the keyboard reaches the stage.
  */
-.lmm-actions {
+.mmk-actions {
   display: flex;
   flex: none;
   align-items: center;
@@ -104,19 +119,19 @@
   transition: opacity 0.15s ease;
 }
 
-.lmm-host:hover .lmm-actions,
-.lmm-host:focus-within .lmm-actions,
-.lmm-fs .lmm-actions {
+.mmk-host:hover .mmk-actions,
+.mmk-host:focus-within .mmk-actions,
+.mmk-fs .mmk-actions {
   opacity: 1;
 }
 
-.lmm-group {
+.mmk-group {
   display: flex;
   align-items: center;
   gap: 1px;
 }
 
-.lmm-group + .lmm-group {
+.mmk-group + .mmk-group {
   margin-left: 5px;
   padding-left: 5px;
   border-left: 1px solid var(--background-modifier-border);
@@ -127,7 +142,7 @@
  * bordered <button> rules off them. Everything below is the flat toolbar
  * look, restated so it does not depend on a theme's icon-button skin.
  */
-.lmm-bar .lmm-flair {
+.mmk-bar .mmk-flair {
   --icon-size: 15px;
   --icon-stroke: 2px;
   display: inline-flex;
@@ -158,22 +173,22 @@
     color 0.12s ease;
 }
 
-.lmm-bar .lmm-flair:hover {
+.mmk-bar .mmk-flair:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
 
-.lmm-bar .lmm-flair:active {
+.mmk-bar .mmk-flair:active {
   background: var(--background-modifier-active-hover, var(--background-modifier-hover));
   color: var(--text-normal);
 }
 
-.lmm-bar .lmm-flair:focus-visible {
+.mmk-bar .mmk-flair:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: -2px;
 }
 
-.lmm-bar .lmm-flair:disabled {
+.mmk-bar .mmk-flair:disabled {
   background: transparent;
   color: var(--text-faint);
   opacity: 0.6;
@@ -184,16 +199,17 @@
  * Fit or Reset whose view is already showing. Not `disabled`: the button
  * keeps focus, so a keyboard reader is not thrown out of the toolbar.
  */
-.lmm-flair.is-current {
+.mmk-flair.is-current {
   opacity: 0.4;
   cursor: default;
 }
 
 /*
- * The bar lives inside `.mermaid`, so a theme's `.mermaid svg` sizing can
- * reach the icons. Restate the icon box here.
+ * The bar lives inside `.mermaid`, so a theme's `.mermaid svg` sizing
+ * reaches the icons: auto width, or a min-width meant to keep a raw diagram
+ * readable on a phone. Three classes outrank that.
  */
-.lmm-flair .svg-icon {
+.mmk-bar .mmk-flair .svg-icon {
   width: var(--icon-size);
   height: var(--icon-size);
   min-width: 0;
@@ -202,13 +218,13 @@
 }
 
 /* The readout keeps its width while the number changes. */
-.lmm-bar .lmm-gauge {
+.mmk-bar .mmk-gauge {
   min-width: 46px;
 }
 
 /* Stage */
 
-.lmm-viewport {
+.mmk-viewport {
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -218,7 +234,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  height: var(--lmm-vh, auto);
+  height: var(--mmk-vh, auto);
   /*
    * Nothing to drag: a click opens the overlay, and the cursor says so.
    * Not `zoom-in`: Chromium draws it from a private macOS cursor that
@@ -229,19 +245,19 @@
   outline: none;
 }
 
-.lmm-viewport--fs {
+.mmk-viewport--fs {
   cursor: default;
 }
 
-.lmm-viewport.is-pannable {
+.mmk-viewport.is-pannable {
   cursor: grab;
 }
 
-.lmm-viewport.is-dragging {
+.mmk-viewport.is-dragging {
   cursor: grabbing;
 }
 
-.lmm-viewport:focus-visible {
+.mmk-viewport:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: -2px;
 }
@@ -251,37 +267,37 @@
  * shadow, so a cropped figure never passes for a complete one. One
  * pseudo-element carries all four; a side is switched on by its size.
  */
-.lmm-viewport::after {
-  --lmm-shade: var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.1));
+.mmk-viewport::after {
+  --mmk-shade: var(--background-modifier-box-shadow, rgba(0, 0, 0, 0.1));
   position: absolute;
   inset: 0;
   z-index: 1;
   background:
-    linear-gradient(to bottom, var(--lmm-shade), transparent) top / 100% var(--lmm-clip-t, 0) no-repeat,
-    linear-gradient(to top, var(--lmm-shade), transparent) bottom / 100% var(--lmm-clip-b, 0) no-repeat,
-    linear-gradient(to right, var(--lmm-shade), transparent) left / var(--lmm-clip-l, 0) 100% no-repeat,
-    linear-gradient(to left, var(--lmm-shade), transparent) right / var(--lmm-clip-r, 0) 100% no-repeat;
+    linear-gradient(to bottom, var(--mmk-shade), transparent) top / 100% var(--mmk-clip-t, 0) no-repeat,
+    linear-gradient(to top, var(--mmk-shade), transparent) bottom / 100% var(--mmk-clip-b, 0) no-repeat,
+    linear-gradient(to right, var(--mmk-shade), transparent) left / var(--mmk-clip-l, 0) 100% no-repeat,
+    linear-gradient(to left, var(--mmk-shade), transparent) right / var(--mmk-clip-r, 0) 100% no-repeat;
   content: "";
   pointer-events: none;
 }
 
-.lmm-viewport.is-clip-top::after {
-  --lmm-clip-t: 14px;
+.mmk-viewport.is-clip-top::after {
+  --mmk-clip-t: 14px;
 }
 
-.lmm-viewport.is-clip-bottom::after {
-  --lmm-clip-b: 14px;
+.mmk-viewport.is-clip-bottom::after {
+  --mmk-clip-b: 14px;
 }
 
-.lmm-viewport.is-clip-left::after {
-  --lmm-clip-l: 14px;
+.mmk-viewport.is-clip-left::after {
+  --mmk-clip-l: 14px;
 }
 
-.lmm-viewport.is-clip-right::after {
-  --lmm-clip-r: 14px;
+.mmk-viewport.is-clip-right::after {
+  --mmk-clip-r: 14px;
 }
 
-.lmm-stage {
+.mmk-stage {
   position: absolute;
   top: 0;
   left: 0;
@@ -291,11 +307,11 @@
   will-change: transform;
 }
 
-.lmm-stage.is-animating {
+.mmk-stage.is-animating {
   transition: transform 0.18s ease;
 }
 
-.lmm-stage svg {
+.mmk-stage svg {
   display: block;
   margin: 0;
   max-width: none;
@@ -303,7 +319,7 @@
 
 /* Fullscreen overlay */
 
-.lmm-fs {
+.mmk-fs {
   position: fixed;
   inset: 0;
   z-index: var(--layer-modal, 100);
@@ -313,10 +329,10 @@
   box-sizing: border-box;
   padding: 32px;
   background: rgba(0, 0, 0, 0.46);
-  animation: lmm-fade 0.14s ease-out;
+  animation: mmk-fade 0.14s ease-out;
 }
 
-.lmm-fs-doc {
+.mmk-fs-doc {
   display: flex;
   width: min(90rem, 100%);
   height: min(100%, calc(100vh - 64px));
@@ -324,40 +340,40 @@
   min-height: 0;
   margin: 0;
   padding: 0;
-  animation: lmm-rise 0.18s ease-out;
+  animation: mmk-rise 0.18s ease-out;
 }
 
-.lmm-fs-doc > .mermaid.lmm-host {
+.mmk-fs-doc > .mermaid.mmk-host {
   width: 100%;
   height: 100%;
   margin: 0;
   box-shadow: var(--shadow-l);
 }
 
-.lmm-fs .lmm-viewport {
+.mmk-fs .mmk-viewport {
   flex: 1;
   height: auto;
   min-height: 0;
 }
 
-.lmm-fs.is-closing {
-  animation: lmm-fade-out 0.14s ease-in forwards;
+.mmk-fs.is-closing {
+  animation: mmk-fade-out 0.14s ease-in forwards;
   pointer-events: none;
 }
 
-@keyframes lmm-fade {
+@keyframes mmk-fade {
   from {
     opacity: 0;
   }
 }
 
-@keyframes lmm-fade-out {
+@keyframes mmk-fade-out {
   to {
     opacity: 0;
   }
 }
 
-@keyframes lmm-rise {
+@keyframes mmk-rise {
   from {
     opacity: 0;
     transform: translateY(6px) scale(0.985);
@@ -365,32 +381,47 @@
 }
 
 @media (max-width: 700px) {
-  .lmm-hint {
+  .mmk-hint {
     display: none;
   }
 
-  .lmm-fs {
+  .mmk-fs {
     padding: 12px;
   }
 
-  .lmm-fs-doc {
+  .mmk-fs-doc {
     height: min(100%, calc(100vh - 24px));
   }
 }
 
+/*
+ * Dark mode. Obsidian inverts `.mermaid > svg` in a dark theme because
+ * Mermaid's stock palette is light. A staged drawing is no longer a direct
+ * child, so the stage repeats that for the stock palette, and both are
+ * switched off for drawings made in the theme's own colours.
+ */
+.theme-dark .mmk-stage > svg {
+  filter: invert(100%) hue-rotate(180deg) saturate(1.25);
+}
+
+.mmk-themed .mmk-stage > svg,
+.mmk-themed.theme-dark .mermaid > svg {
+  filter: none;
+}
+
 /* Template picker */
 
-.lmm-picker {
+.mmk-picker {
   --dialog-width: min(54rem, 92vw);
   width: var(--dialog-width);
 }
 
-.lmm-picker-search {
+.mmk-picker-search {
   width: 100%;
   margin-bottom: 12px;
 }
 
-.lmm-picker-grid {
+.mmk-picker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
@@ -400,14 +431,14 @@
   overflow-y: auto;
 }
 
-.lmm-picker-empty {
+.mmk-picker-empty {
   padding: 32px 0;
   color: var(--text-faint);
   font-size: var(--font-ui-small);
   text-align: center;
 }
 
-.lmm-card {
+.mmk-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -423,18 +454,18 @@
     background-color 0.12s ease;
 }
 
-.lmm-card:hover {
+.mmk-card:hover {
   border-color: var(--interactive-accent);
   background: var(--background-modifier-hover);
 }
 
-.lmm-card:focus-visible {
+.mmk-card:focus-visible {
   outline: 2px solid var(--interactive-accent);
   outline-offset: 1px;
 }
 
 /* The drawing is a picture of the template, not a control: clicks belong to the card. */
-.lmm-thumb {
+.mmk-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -443,7 +474,7 @@
   pointer-events: none;
 }
 
-.lmm-thumb svg {
+.mmk-thumb svg {
   width: 100%;
   max-width: 100%;
   height: 100%;
@@ -453,11 +484,15 @@
  * Mermaid bakes a light palette into each drawing. Obsidian flips its own
  * diagrams in a dark theme the same way, so the picture matches the result.
  */
-.theme-dark .lmm-thumb {
+.theme-dark .mmk-thumb {
   filter: invert(1) hue-rotate(180deg);
 }
 
-.lmm-card-name {
+.mmk-themed .mmk-thumb {
+  filter: none;
+}
+
+.mmk-card-name {
   overflow: hidden;
   color: var(--text-normal);
   font-size: var(--font-ui-small);
@@ -469,13 +504,13 @@
 
 /* No hover to wake the controls up, so they stay at full strength. */
 @media (hover: none) {
-  .lmm-actions {
+  .mmk-actions {
     opacity: 1;
   }
 }
 
 @media (pointer: coarse) {
-  .lmm-bar .lmm-flair {
+  .mmk-bar .mmk-flair {
     min-width: 36px;
     min-height: 36px;
   }
@@ -485,51 +520,51 @@
    * scroll under a finger. Once it overflows, or in the overlay, the
    * stage takes every gesture.
    */
-  .lmm-viewport {
+  .mmk-viewport {
     touch-action: pan-y;
   }
 
-  .lmm-viewport.is-pannable-y,
-  .lmm-fs .lmm-viewport {
+  .mmk-viewport.is-pannable-y,
+  .mmk-fs .mmk-viewport {
     touch-action: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lmm-fs,
-  .lmm-fs-doc {
+  .mmk-fs,
+  .mmk-fs-doc {
     animation: none;
   }
 
-  .lmm-stage.is-animating,
-  .lmm-bar .lmm-flair,
-  .lmm-actions,
-  .lmm-hint,
-  .lmm-card {
+  .mmk-stage.is-animating,
+  .mmk-bar .mmk-flair,
+  .mmk-actions,
+  .mmk-hint,
+  .mmk-card {
     transition: none;
   }
 }
 
 @media print {
-  .lmm-bar {
+  .mmk-bar {
     display: none;
   }
 
-  .lmm-viewport {
+  .mmk-viewport {
     overflow: visible;
     height: auto;
   }
 
-  .lmm-viewport::after {
+  .mmk-viewport::after {
     display: none;
   }
 
-  .lmm-stage {
+  .mmk-stage {
     position: static;
     transform: none;
   }
 
-  .lmm-fs {
+  .mmk-fs {
     display: none;
   }
 }

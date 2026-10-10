@@ -5,11 +5,18 @@ import { measureSvg } from "./dom";
 import { t } from "./i18n";
 import { ICON_ID, ICON_SVG } from "./icon";
 import { insertDiagram } from "./insert";
+import { drawDiagram, mermaidApi } from "./render";
+import { DEFAULT_SETTINGS, type Settings, SettingsTab } from "./settings";
+import { type DiagramTheme, diagramTheme, drawnWith } from "./theme";
+import { locateSource, rememberSection } from "./source";
 import { TemplatePicker } from "./picker";
 
-const TEARDOWN_KEY = "__mermaidKitTeardown";
+const TEARDOWN_KEY = "__mmkTeardown";
 const DIAGRAMS = '.mermaid svg, svg[id^="mermaid-"]';
-const OWN_CHROME = ".lmm-viewport, .lmm-fs, .lmm-bar, .lmm-picker";
+const OWN_CHROME = ".mmk-viewport, .mmk-fs, .mmk-bar, .mmk-picker";
+// Chrome from Lumen Stage, or from a build of this plugin before the class prefix changed.
+// It is about to be torn down by its owner, or is still owned by it; either way, not ours to wrap.
+const LEGACY_CHROME = ".lmm-viewport, .lmm-fs, .lmm-bar";
 
 type TeardownWindow = Window & { [TEARDOWN_KEY]?: number };
 
@@ -23,19 +30,35 @@ export default class MermaidKitPlugin extends Plugin {
   private retry = 0;
   private retryTimer = 0;
   private picker: TemplatePicker | null = null;
+  settings: Settings = DEFAULT_SETTINGS;
+  /** The theme diagrams are being drawn with, or null while Mermaid keeps its stock palette. */
+  private theme: DiagramTheme | null = null;
+  /** Mermaid's configuration as Obsidian set it, kept to hand back. */
+  private stockConfig: Record<string, unknown> | null = null;
+  private styleTimer = 0;
 
   private onPointerOver = (event: PointerEvent): void => {
     // Safety net: a diagram the scan missed is wrapped as soon as the pointer reaches it.
     const target = event.target as Node | null;
     if (!target?.instanceOf(Element)) return;
     const host = target.closest(".mermaid");
-    if (!host || host.hasClass("lmm-host") || host.closest(OWN_CHROME)) return;
+    if (!host || host.hasClass("mmk-host") || host.closest(OWN_CHROME) || host.hasClass("lmm-host")) return;
     const svg = host.querySelector("svg");
     if (svg) this.process(svg);
   };
 
-  onload(): void {
+  async onload(): Promise<void> {
     this.cancelDeferredTeardown();
+    this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<Settings> | null) };
+    this.addSettingTab(new SettingsTab(this.app, this, this));
+    this.app.workspace.onLayoutReady(() => void this.applyStyle());
+    this.registerEvent(
+      this.app.workspace.on("css-change", () => {
+        // Theme and snippet reloads arrive in bursts; one pass after they settle is enough.
+        window.clearTimeout(this.styleTimer);
+        this.styleTimer = window.setTimeout(() => void this.applyStyle(), 250);
+      }),
+    );
 
     this.app.workspace.onLayoutReady(() => this.scan());
     const queue = () => this.queueScan();
@@ -51,7 +74,8 @@ export default class MermaidKitPlugin extends Plugin {
 
     this.syncDocuments();
 
-    this.registerMarkdownPostProcessor((el) => {
+    this.registerMarkdownPostProcessor((el, ctx) => {
+      rememberSection(el, ctx);
       window.setTimeout(() => {
         if (this.scanWithin(el)) this.scheduleRetry(true);
       }, 220);
@@ -85,6 +109,8 @@ export default class MermaidKitPlugin extends Plugin {
 
   onunload(): void {
     this.picker?.close();
+    window.clearTimeout(this.styleTimer);
+    void this.restoreStock();
     window.clearTimeout(this.retryTimer);
     const docs = [...this.observers.keys()];
     for (const doc of docs) this.unobserve(doc);
@@ -108,8 +134,8 @@ export default class MermaidKitPlugin extends Plugin {
     win[TEARDOWN_KEY] = win.setTimeout(() => {
       delete win[TEARDOWN_KEY];
       for (const doc of docs) {
-        doc.querySelectorAll(".lmm-fs").forEach((node) => node.remove());
-        doc.querySelectorAll(".mermaid.lmm-host").forEach((node) => {
+        doc.querySelectorAll(".mmk-fs").forEach((node) => node.remove());
+        doc.querySelectorAll(".mermaid.mmk-host").forEach((node) => {
           if (node.instanceOf(HTMLElement)) unwrapHost(node);
         });
       }
@@ -159,13 +185,13 @@ export default class MermaidKitPlugin extends Plugin {
   }
 
   adoptExisting(doc: Document): void {
-    doc.querySelectorAll(".mermaid.lmm-host").forEach((node) => {
+    doc.querySelectorAll(".mermaid.mmk-host").forEach((node) => {
       if (!node.instanceOf(HTMLElement)) return;
       // The overlay is owned by the canvas that opened it; adopting it would add a second
       // controller and strand the opener with a fullscreen it can never close.
-      if (node.closest(".lmm-fs")) return;
+      if (node.closest(".mmk-fs")) return;
       if ([...this.views].some((view) => view.host === node)) return;
-      const adopted = MermaidCanvas.adopt(node);
+      const adopted = MermaidCanvas.adopt(node, { source: () => locateSource(this.app, node) });
       if (adopted) this.views.add(adopted);
     });
   }
@@ -226,6 +252,7 @@ export default class MermaidKitPlugin extends Plugin {
     if (!node.instanceOf(SVGSVGElement)) return "skip";
     // Covers the wrapped diagram, the overlay, and the toolbar's own icon SVGs.
     if (node.closest(OWN_CHROME)) return "skip";
+    if (node.closest(LEGACY_CHROME)) return "pending";
     const host = node.closest(".mermaid");
     if (!host?.instanceOf(HTMLElement)) return "skip";
     // Obsidian measures a diagram in a scratch .mermaid on <body>, then moves the result into
@@ -235,25 +262,69 @@ export default class MermaidKitPlugin extends Plugin {
     const size = measureSvg(node);
     if (!size || size.w < 40 || size.h < 20) return "pending";
 
-    if (host.hasClass("lmm-host")) {
+    if (host.hasClass("mmk-host")) {
       // The host was re-rendered in place: clear the chrome that belonged to the old diagram.
       for (const view of this.views) {
         if (view.host !== host) continue;
         view.detach();
         this.views.delete(view);
       }
-      host.querySelectorAll(":scope > .lmm-bar, :scope > .lmm-viewport").forEach((el) => el.remove());
+      host.querySelectorAll(":scope > .mmk-bar, :scope > .mmk-viewport").forEach((el) => el.remove());
     }
 
     node.setAttribute(MARK, "1");
     try {
-      this.views.add(new MermaidCanvas(node));
+      const view = new MermaidCanvas(node, { source: () => locateSource(this.app, host) });
+      this.views.add(view);
+      // Obsidian may have drawn this one before the theme was in place.
+      if (this.theme && !drawnWith(node, this.theme)) void this.redraw(view);
     } catch (error) {
       node.removeAttribute(MARK);
       console.error("Mermaid Kit: could not enhance a Mermaid diagram", error);
       return "skip";
     }
     return "done";
+  }
+
+  async updateSettings(change: Partial<Settings>): Promise<void> {
+    this.settings = { ...this.settings, ...change };
+    await this.saveData(this.settings);
+    await this.applyStyle();
+  }
+
+  /**
+   * Points Mermaid at the current theme's colours, or back at its stock palette, and redraws
+   * the staged diagrams when that changed anything.
+   */
+  async applyStyle(): Promise<void> {
+    const mermaid = await mermaidApi();
+    const next = this.settings.matchTheme ? diagramTheme(document) : null;
+    for (const doc of this.documents()) doc.body.toggleClass("mmk-themed", !!next);
+    if (JSON.stringify(next) === JSON.stringify(this.theme)) return;
+
+    if (!this.stockConfig) {
+      const { themeVariables: _variables, themeCSS: _css, ...stock } = mermaid.mermaidAPI.getSiteConfig();
+      // Kept by reference: the configuration holds functions, so it cannot be cloned.
+      this.stockConfig = stock;
+    }
+    mermaid.initialize(next ? { ...this.stockConfig, ...next } : this.stockConfig);
+    this.theme = next;
+    for (const view of [...this.views, ...MermaidCanvas.overlays]) void this.redraw(view);
+  }
+
+  async restoreStock(): Promise<void> {
+    for (const doc of this.documents()) doc.body.removeClass("mmk-themed");
+    if (!this.theme || !this.stockConfig) return;
+    this.theme = null;
+    (await mermaidApi()).initialize(this.stockConfig);
+  }
+
+  /** Redraws one staged diagram from its source with the current Mermaid configuration. */
+  async redraw(view: MermaidCanvas): Promise<void> {
+    const source = view.source?.();
+    if (!source) return;
+    const svg = await drawDiagram(view.doc, source.text);
+    if (svg) view.replaceSvg(svg);
   }
 
   /** Opens the template picker for `editor`, or for the note being edited when called from the ribbon. */

@@ -1,12 +1,7 @@
-import { type App, Modal, getLanguage, loadMermaid } from "obsidian";
+import { type App, Modal, getLanguage } from "obsidian";
 import { t } from "./i18n";
+import { drawDiagram } from "./render";
 import { TEMPLATES, type Template } from "./templates";
-
-interface MermaidApi {
-  render(id: string, source: string): Promise<{ svg: string }>;
-}
-
-let renderCount = 0;
 
 function templateName(template: Template): string {
   const language = getLanguage();
@@ -29,11 +24,11 @@ export class TemplatePicker extends Modal {
 
   onOpen(): void {
     this.live = true;
-    this.modalEl.addClass("lmm-picker");
+    this.modalEl.addClass("mmk-picker");
     this.setTitle(t("pickerTitle"));
 
     this.search = this.contentEl.createEl("input", {
-      cls: "lmm-picker-search",
+      cls: "mmk-picker-search",
       type: "search",
       attr: { placeholder: t("pickerSearch"), "aria-label": t("pickerSearch") },
     });
@@ -45,15 +40,15 @@ export class TemplatePicker extends Modal {
       if (first) this.pick(first);
     });
 
-    const grid = this.contentEl.createDiv({ cls: "lmm-picker-grid" });
-    this.empty = this.contentEl.createDiv({ cls: "lmm-picker-empty", text: t("pickerEmpty") });
+    const grid = this.contentEl.createDiv({ cls: "mmk-picker-grid" });
+    this.empty = this.contentEl.createDiv({ cls: "mmk-picker-empty", text: t("pickerEmpty") });
     this.empty.hide();
 
     for (const template of TEMPLATES) {
       // A div, not a <button>: themes paint every <button> with their own chrome.
-      const card = grid.createDiv({ cls: "lmm-card", attr: { role: "button", tabindex: "0" } });
-      card.createDiv({ cls: "lmm-thumb" });
-      card.createSpan({ cls: "lmm-card-name", text: templateName(template) });
+      const card = grid.createDiv({ cls: "mmk-card", attr: { role: "button", tabindex: "0" } });
+      card.createDiv({ cls: "mmk-thumb" });
+      card.createSpan({ cls: "mmk-card-name", text: templateName(template) });
       card.addEventListener("click", () => this.pick(template));
       card.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -95,30 +90,11 @@ export class TemplatePicker extends Modal {
    * loses its card, so the picker never offers a template that would insert a broken diagram.
    */
   private async drawThumbnails(): Promise<void> {
-    let mermaid: MermaidApi;
-    try {
-      mermaid = (await loadMermaid()) as MermaidApi;
-    } catch {
-      return;
-    }
     const doc = this.modalEl.ownerDocument;
     for (const [template, card] of [...this.cards]) {
       if (!this.live) return;
-      // Not a `mermaid-` id: the stage scan treats those as diagrams to wrap.
-      const id = `lmm-tpl-${++renderCount}`;
-      let svg: string | null = null;
-      try {
-        svg = (await mermaid.render(id, template.body)).svg;
-      } catch {
-        svg = null;
-      }
-      // Mermaid leaves its measuring nodes on <body> when a render fails.
-      doc.querySelectorAll(`#${id}, #d${id}`).forEach((node) => node.remove());
+      const figure = await drawDiagram(doc, template.body);
       if (!this.live) return;
-
-      const figure = svg
-        ? new DOMParser().parseFromString(svg, "text/html").body.querySelector("svg")
-        : null;
       if (!figure) {
         card.remove();
         this.cards.delete(template);
@@ -127,7 +103,7 @@ export class TemplatePicker extends Modal {
       figure.removeAttribute("style");
       figure.setAttribute("width", "100%");
       figure.setAttribute("height", "100%");
-      card.querySelector(".lmm-thumb")?.appendChild(figure);
+      card.querySelector(".mmk-thumb")?.appendChild(figure);
     }
   }
 }

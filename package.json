@@ -1,6 +1,6 @@
 {
   "name": "obsidian-mermaid-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Mermaid Kit — pan, zoom, and fullscreen for Obsidian Mermaid diagrams",
   "main": "main.js",
@@ -9,7 +9,8 @@
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
     "check": "tsc --noEmit --skipLibCheck && node scripts/validate.mjs",
-    "version": "node scripts/version-bump.mjs"
+    "version": "node scripts/version-bump.mjs",
+    "test": "node scripts/test.mjs"
   },
   "keywords": [
     "obsidian",

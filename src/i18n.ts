@@ -21,6 +21,16 @@ const en = {
   pickerSearch: "Filter diagram types",
   pickerEmpty: "No diagram type matches.",
   needEditor: "Open a note in editing view to insert a diagram.",
+  more: "More actions",
+  copyImage: "Copy as image",
+  copySvg: "Copy as SVG",
+  copySource: "Copy Mermaid source",
+  editSource: "Edit source",
+  copied: "Copied to clipboard.",
+  copyFailed: "Could not copy to the clipboard.",
+  setMatchTheme: "Match diagrams to the theme",
+  setMatchThemeDesc:
+    "Draw every diagram in the colors and font of the active theme, in light and dark mode. Turn off to keep the stock Mermaid palette.",
 };
 
 type Strings = typeof en;
@@ -46,6 +56,15 @@ const locales: Record<string, Partial<Strings>> = {
     pickerSearch: "筛选图表类型",
     pickerEmpty: "没有匹配的图表类型。",
     needEditor: "请先在编辑视图中打开笔记,再插入图表。",
+    more: "更多操作",
+    copyImage: "复制为图片",
+    copySvg: "复制为 SVG",
+    copySource: "复制 Mermaid 源码",
+    editSource: "编辑源码",
+    copied: "已复制到剪贴板。",
+    copyFailed: "无法复制到剪贴板。",
+    setMatchTheme: "图表配色跟随主题",
+    setMatchThemeDesc: "用当前主题的颜色和字体绘制所有图表,浅色和深色模式都适用。关闭后使用 Mermaid 默认配色。",
   },
   "zh-TW": {
     controls: "圖表控制",
@@ -67,6 +86,15 @@ const locales: Record<string, Partial<Strings>> = {
     pickerSearch: "篩選圖表類型",
     pickerEmpty: "沒有符合的圖表類型。",
     needEditor: "請先在編輯檢視中開啟筆記,再插入圖表。",
+    more: "更多操作",
+    copyImage: "複製為圖片",
+    copySvg: "複製為 SVG",
+    copySource: "複製 Mermaid 原始碼",
+    editSource: "編輯原始碼",
+    copied: "已複製到剪貼簿。",
+    copyFailed: "無法複製到剪貼簿。",
+    setMatchTheme: "圖表配色跟隨主題",
+    setMatchThemeDesc: "以目前主題的顏色與字型繪製所有圖表,淺色與深色模式皆適用。關閉後使用 Mermaid 預設配色。",
   },
 };
 
