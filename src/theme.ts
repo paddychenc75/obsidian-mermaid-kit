@@ -4,6 +4,8 @@
  * trick of inverting a light drawing.
  */
 
+import { el } from "./dom";
+
 type Rgb = [number, number, number];
 
 const hex = ([r, g, b]: Rgb): string =>
@@ -23,8 +25,8 @@ export function luminance([r, g, b]: Rgb): number {
  * `color(srgb …)`, and translucent values that Mermaid's colour maths cannot read;
  * a translucent colour is flattened onto `under`.
  */
-function painter(doc: Document): (css: string, under: Rgb) => Rgb | null {
-  const canvas = doc.createElement("canvas");
+function painter(): (css: string, under: Rgb) => Rgb | null {
+  const canvas = el("canvas");
   canvas.width = 1;
   canvas.height = 1;
   const context = canvas.getContext("2d", { willReadFrequently: true });
@@ -63,7 +65,7 @@ const HUES = ["blue", "green", "orange", "purple", "cyan", "red", "yellow", "pin
 export function diagramTheme(doc: Document): DiagramTheme {
   const win = doc.defaultView ?? window;
   const style = win.getComputedStyle(doc.body);
-  const paint = painter(doc);
+  const paint = painter();
   const dark = doc.body.classList.contains("theme-dark");
   const read = (name: string, under: Rgb, fallback: Rgb): Rgb =>
     paint(style.getPropertyValue(name), under) ?? fallback;
@@ -76,7 +78,6 @@ export function diagramTheme(doc: Document): DiagramTheme {
   const accent = read("--interactive-accent", bg, [72, 104, 224]);
   const hues = HUES.map((name) => read(`--color-${name}`, bg, accent));
   const red = hues[5] ?? accent;
-  const green = hues[1] ?? accent;
 
   // One recipe for every shape: a faint accent wash, a firm accent edge, quiet grey lines.
   const node = mix(accent, bg, dark ? 0.2 : 0.1);

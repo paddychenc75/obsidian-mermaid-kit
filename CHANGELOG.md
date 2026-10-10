@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.1
+
+Community review fixes. No change in behavior.
+
+- The setting is declared through `getSettingDefinitions()`, so it appears in Obsidian's settings search
+- Use Obsidian's `createEl` helper instead of `document.createElement`
+- Remove an unnecessary type assertion and an unused variable
+
 ## 1.1.0
 
 Theme-matched diagrams, copy and edit actions, and a chrome that no longer depends on a theme.

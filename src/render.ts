@@ -28,5 +28,5 @@ export async function drawDiagram(doc: Document, source: string): Promise<SVGSVG
   doc.querySelectorAll(`#${id}, #d${id}`).forEach((node) => node.remove());
   if (!markup) return null;
   const svg = new DOMParser().parseFromString(markup, "text/html").body.querySelector("svg");
-  return svg ? (doc.adoptNode(svg) as SVGSVGElement) : null;
+  return svg ? doc.adoptNode(svg) : null;
 }

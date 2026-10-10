@@ -1,4 +1,4 @@
-import type { Size } from "./dom";
+import { type Size, el } from "./dom";
 
 /**
  * A diagram takes most of its look from stylesheets outside the SVG: the app's, the theme's.
@@ -54,20 +54,19 @@ export function standaloneSvg(svg: SVGSVGElement, size: Size): string {
 
 /** Rasterizes SVG markup on `background`, at the screen's density, with a margin around it. */
 export async function svgToPng(
-  doc: Document,
+  win: Window,
   markup: string,
   size: Size,
   background: string,
 ): Promise<Blob> {
-  const image = doc.createElement("img");
+  const image = el("img");
   image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
   await image.decode();
 
-  const win = doc.defaultView ?? window;
   const width = size.w + MARGIN * 2;
   const height = size.h + MARGIN * 2;
   const density = Math.min(Math.max(2, win.devicePixelRatio || 1), MAX_PIXELS / Math.max(width, height));
-  const canvas = doc.createElement("canvas");
+  const canvas = el("canvas");
   canvas.width = Math.round(width * density);
   canvas.height = Math.round(height * density);
   const context = canvas.getContext("2d");

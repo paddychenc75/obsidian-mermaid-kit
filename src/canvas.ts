@@ -886,7 +886,7 @@ export class MermaidCanvas {
     if (!host) return;
     try {
       const markup = standaloneSvg(this.svg, this.nat);
-      const blob = await svgToPng(this.doc, markup, this.nat, backdropOf(host));
+      const blob = await svgToPng(this.win, markup, this.nat, backdropOf(host));
       await this.win.navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
       new Notice(t("copied"));
     } catch (error) {

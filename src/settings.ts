@@ -1,4 +1,4 @@
-import { type App, PluginSettingTab, Setting } from "obsidian";
+import { type App, type Plugin, PluginSettingTab, type SettingDefinitionItem } from "obsidian";
 import { t } from "./i18n";
 
 export interface Settings {
@@ -18,21 +18,28 @@ interface SettingsHost {
 export class SettingsTab extends PluginSettingTab {
   constructor(
     app: App,
-    plugin: ConstructorParameters<typeof PluginSettingTab>[1],
+    plugin: Plugin,
     private host: SettingsHost,
   ) {
     super(app, plugin);
   }
 
-  display(): void {
-    this.containerEl.empty();
-    new Setting(this.containerEl)
-      .setName(t("setMatchTheme"))
-      .setDesc(t("setMatchThemeDesc"))
-      .addToggle((toggle) =>
-        toggle.setValue(this.host.settings.matchTheme).onChange((value) => {
-          void this.host.updateSettings({ matchTheme: value });
-        }),
-      );
+  getSettingDefinitions(): SettingDefinitionItem<keyof Settings>[] {
+    return [
+      {
+        name: t("setMatchTheme"),
+        desc: t("setMatchThemeDesc"),
+        control: { type: "toggle", key: "matchTheme", defaultValue: DEFAULT_SETTINGS.matchTheme },
+      },
+    ];
+  }
+
+  getControlValue(key: string): unknown {
+    return this.host.settings[key as keyof Settings];
+  }
+
+  /** Routed through the plugin, which also has to act on a change, not only store it. */
+  setControlValue(key: string, value: unknown): Promise<void> {
+    return this.host.updateSettings({ [key]: value });
   }
 }
