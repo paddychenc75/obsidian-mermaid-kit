@@ -55,6 +55,18 @@
 }
 
 /*
+ * Obsidian 1.15 mounts its own zoom control (`.pele-zoom`: plus, minus,
+ * reset, stacked) in every `.mermaid`. The stage has its own toolbar and
+ * would only get a second set on top of "more" and "reset". Obsidian sets
+ * `display` inline and keeps re-attaching the node, so it is hidden with
+ * properties it never writes instead.
+ */
+.mermaid.mmk-host > .pele-zoom {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/*
  * Core draws a hover outline around the embed block. The stage has its
  * own frame, and the outline would also fence in the stage's margins.
  */

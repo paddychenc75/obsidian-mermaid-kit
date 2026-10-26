@@ -1,6 +1,6 @@
 {
   "name": "obsidian-mermaid-kit",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Mermaid Kit — pan, zoom, and fullscreen for Obsidian Mermaid diagrams",
   "main": "main.js",

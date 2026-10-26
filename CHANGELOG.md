@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+Fixed
+
+- On Obsidian 1.15, the built-in zoom buttons (plus, minus, reset) appeared over the toolbar of a staged diagram and covered its "more" button. The stage now hides them
+
 ## 1.1.1
 
 Community review fixes. No change in behavior.
